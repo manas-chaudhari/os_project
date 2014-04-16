@@ -789,4 +789,3 @@ void ke_process_events()
 	/* Unlock */
 	pthread_mutex_unlock(&ke->process_events_mutex);
 }
-

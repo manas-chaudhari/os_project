@@ -40,6 +40,7 @@
 #include <errno.h>
 #include <gpukernel.h>
 #include <sys/time.h>
+#include "vmem_manager.h"
 
 
 /* Some forward declarations */
@@ -87,26 +88,27 @@ struct mem_host_mapping_t {
 struct mem_page_t {
 	uint32_t tag;
 	enum mem_access_enum perm;  /* Access permissions; combination of flags */
-	struct mem_page_t *next;
+	// struct mem_page_t *next;
 	unsigned char *data;
 	struct mem_host_mapping_t *host_mapping;  /* If other than null, page is host mapping */
 };
+
+uint32_t DISK_POINTER_ALL;
 
 struct mem_t {
 	struct mem_page_t *pages[MEM_PAGE_COUNT];
 	int sharing;  /* Number of contexts sharing memory map */
 	uint32_t last_address;  /* Address of last access */
-	uint32_t DISK_POINTER_NULL;
-	struct page_table;
+	struct page_table *pt;
 	int safe;  /* Safe mode */
 	struct mem_host_mapping_t *host_mapping_list;  /* List of host mappings */
 
 	/* Virtual memory */
 	int free_frames_size; /* Number of free frames available */
-	uint32_t free_frames[MEM_PAGE_COUNT; /* Array of physical addresses of free frames */
-	ptentry_t *valid_pages[MEM_PAGE_COUNT];
-	int clock_pointer = 0;
-	int valid_pages_size = 0;
+	uint32_t free_frames[MEM_PAGE_COUNT]; /* Array of physical addresses of free frames */
+	ptentry_t *valid_ptentries[MEM_PAGE_COUNT];
+	int clock_pointer;
+	int valid_pages_size;
 
 };
 
