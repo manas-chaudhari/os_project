@@ -69,6 +69,7 @@ struct mem_page_t *mem_page_get(struct mem_t *mem, uint32_t addr)
 
 	if (!entry) 
 	{
+		printf("Page not found for addr: %d\n", addr);
 		return NULL;
 	}
 	else {
@@ -146,6 +147,7 @@ struct ptentry* mem_ptentry_create(struct mem_t* mem, uint32_t vaddr)
 /* Create new mem page */
 static struct mem_page_t *mem_page_create(struct mem_t *mem, uint32_t addr, int perm)
 {
+	printf("Creating page\n");
 	struct mem_page_t *page;
 
 	struct ptentry* entry = mem_ptentry_create(mem, addr);
@@ -154,6 +156,7 @@ static struct mem_page_t *mem_page_create(struct mem_t *mem, uint32_t addr, int 
 
 	page = mem->pages[ptag];
 	page->perm = perm;
+	entry->perm = perm;
 	
 	/* Insert in pages hash table */
 	// page->next = mem->pages[index];
@@ -277,8 +280,8 @@ void *mem_get_buffer(struct mem_t *mem, uint32_t addr, int size,
 		return NULL;
 	
 	/* Check page permissions */
-	if ((page->perm & access) != access && mem->safe)
-		fatal("mem_get_buffer: permission denied at 0x%x", addr);
+	//if ((page->perm & access) != access && mem->safe)
+	//	fatal("mem_get_buffer: permission denied at 0x%x", addr);
 	
 	/* Allocate and initialize page data if it does not exist yet. */
 	if (!page->data)
@@ -382,6 +385,11 @@ struct page_table* mem_page_table_create()
 {
 	struct page_table *pt;
 	pt = calloc(1, sizeof(struct page_table));
+	uint32_t i;
+	for (i = 0; i < MEM_PAGE_COUNT; ++i)
+	{
+		pt->entries[i] = NULL;
+	}
 	// TODO Check if pt->entries are all NULL
 	return pt;
 }
@@ -786,28 +794,41 @@ void vmem_load_page(struct mem_t *mem, struct ptentry *entry) {
 
 void* read_swap(uint32_t disk_start) {
 	FILE* ft;
-	ft = fopen("../../Sim_Disk", "ab+");
+	printf("Opening file\n");
+	ft = fopen("../../Sim_disk", "ab+");
+	printf("Executing fseek\n");
 	fseek(ft, disk_start, SEEK_SET);
-	void* buf;
+	void* buf = malloc(MEM_PAGESIZE);
+	printf("Fread\n");
 	fread(buf, sizeof(char), MEM_PAGESIZE, ft);
+	printf("FClose\n");
 	fclose(ft);
+	printf("buf %s\n", (char*)buf);
 	return buf;
 }
 
 void write_swap(uint32_t disk_start, void* data) {
 	FILE* ft;
-	ft = fopen("../../Sim_Disk", "ab+");
+	ft = fopen("../../Sim_disk", "ab+");
 	fseek(ft, disk_start, SEEK_SET);
 	fwrite(data, sizeof(char), MEM_PAGESIZE, ft);
 	fclose(ft);
 }
 
 void perform_page_in(struct mem_t *mem, pageop_t op) {
-	printf("Page in: %d -> %d\n", op.vaddr, op.paddr);
-	void* data = read_swap(op.vaddr);
+	printf("Page in: %d -> %d, disk_start: %d\n", op.vaddr, op.paddr, op.pte->disk_start);
+	void* data = read_swap(op.pte->disk_start);
 	struct mem_page_t *page = get_page_from_ptentry(mem, op.pte);
-	page->data = (unsigned char*) data;
+	if (page->data == NULL) {
+		page->data = calloc(1, MEM_PAGESIZE);
+	}
+	// if (data != NULL) {
+		printf("Mempy\n");
+		memcpy(page->data, data, MEM_PAGESIZE);
+		printf("Mempy complete\n");		
+	// }
 	
+	page->perm = op.pte->perm;
 	// page->host_mapping = ??;
 
 	op.pte->valid_bit = 1;
@@ -817,11 +838,15 @@ void perform_page_in(struct mem_t *mem, pageop_t op) {
 }
 
 void perform_page_out(struct mem_t *mem, pageop_t op) {
-	printf("Page out: %d from %d\n", op.vaddr, op.paddr);
+	printf("Page out: %d from %d, disk_start: %d\n", op.vaddr, op.paddr, op.pte->disk_start);
 	if (op.pte->dirtybit) {
 		struct mem_page_t *page = get_page_from_ptentry(mem, op.pte);
-		void* data = (void*) page->data;
-		write_swap(op.pte->disk_start, data);
+		op.pte->perm = page->perm;
+		if (page->data) {
+			void* data = malloc(MEM_PAGESIZE);
+			memcpy(data, page->data, MEM_PAGESIZE);
+			write_swap(op.pte->disk_start, data);
+		}
 	}
 
 	op.pte->valid_bit = 0;
@@ -856,10 +881,10 @@ void display_state(struct mem_t *mem) {
 
 struct ptentry* run_clock_policy(struct mem_t *mem, struct ptentry* newpage) {
     printf("Starting page replacement, initial state:\n");
-    display_state(mem);
+    // display_state(mem);
     struct ptentry **page_list = mem->valid_ptentries;
 	while (1) {
-		int clock_pointer = mem->clock_pointer;
+		uint32_t clock_pointer = mem->clock_pointer;
 		if (!page_list[clock_pointer]->used) {
 			struct ptentry * page_to_replace = page_list[clock_pointer];
 			page_list[clock_pointer] = newpage;
@@ -870,7 +895,7 @@ struct ptentry* run_clock_policy(struct mem_t *mem, struct ptentry* newpage) {
 			page_list[clock_pointer]->used = 0;
 			inc_pointer(mem);
 		}
-        display_state(mem);
+        // display_state(mem);
 	}
 }
 

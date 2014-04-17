@@ -18,6 +18,8 @@ struct ptentry
 	int used;
 	uint32_t disk_start;
 
+	enum mem_access_enum perm;  /* Access permissions; combination of flags */
+
 	struct ptentry *next;
 	struct mem_host_mapping_t *host_mapping;  /* If other than null, page is host mapping */
 };

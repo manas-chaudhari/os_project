@@ -40,7 +40,6 @@
 #include <errno.h>
 #include <gpukernel.h>
 #include <sys/time.h>
-#include "vmem_manager.h"
 
 
 /* Some forward declarations */
@@ -104,11 +103,11 @@ struct mem_t {
 	struct mem_host_mapping_t *host_mapping_list;  /* List of host mappings */
 
 	/* Virtual memory */
-	int free_frames_size; /* Number of free frames available */
+	uint32_t free_frames_size; /* Number of free frames available */
 	uint32_t free_frames[MEM_PAGE_COUNT]; /* Array of physical addresses of free frames */
 	struct ptentry *valid_ptentries[MEM_PAGE_COUNT];
-	int clock_pointer;
-	int valid_ptentries_size;
+	uint32_t clock_pointer;
+	uint32_t valid_ptentries_size;
 
 };
 
@@ -677,5 +676,48 @@ struct my_interrupt front_of_queue(struct my_interrupts_queue *l);
 
 long long unsigned int INSTR_COUNTER;
 struct my_interrupts_queue Q;
+
+
+#define VIRT_MEM_LOGPAGESIZE    12
+#define VIRT_MEM_PAGESHIFT      MEM_LOGPAGESIZE
+#define VIRT_MEM_PAGESIZE       (1<<MEM_LOGPAGESIZE)
+#define VIRT_MEM_PAGEMASK       (~(MEM_PAGESIZE-1))
+#define VIRT_MEM_PAGE_COUNT     1024
+
+struct ptentry
+{
+	int valid_bit;
+	uint32_t paddr;
+	uint32_t tag;
+	int dirtybit;
+	int used;
+	uint32_t disk_start;
+
+	enum mem_access_enum perm;  /* Access permissions; combination of flags */
+
+	struct ptentry *next;
+	struct mem_host_mapping_t *host_mapping;  /* If other than null, page is host mapping */
+};
+
+struct page_table
+{
+	struct ptentry *entries[VIRT_MEM_PAGE_COUNT];
+};
+
+typedef struct page_operation_t pageop_t;
+
+#define OPERATION_PAGE_OUT 0
+#define OPERATION_PAGE_IN 1
+
+struct page_operation_t {
+	int operation;
+	uint32_t vaddr;
+	struct ptentry *pte;
+	uint32_t paddr;
+};
+
+void vmem_load_page(struct mem_t *mem, struct ptentry *entry);
+void display_state(struct mem_t *mem);
+
 #endif
 
