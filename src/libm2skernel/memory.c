@@ -283,10 +283,10 @@ void *mem_get_buffer(struct mem_t *mem, uint32_t addr, int size,
 		return NULL;
 	
 	/* Check page permissions */
-	if ((page->perm & access) != access && mem->safe) {
-		printf("Permission: %u\n", page->perm);
-		fatal("mem_get_buffer: permission denied at 0x%x", addr);
-	}
+	// if ((page->perm & access) != access && mem->safe) {
+	// 	printf("Permission: %u\n", page->perm);
+	// 	fatal("mem_get_buffer: permission denied at 0x%x", addr);
+	// }
 	
 	/* Allocate and initialize page data if it does not exist yet. */
 	if (!page->data)
@@ -317,8 +317,8 @@ static void mem_access_page_boundary(struct mem_t *mem, uint32_t addr,
 	/* On nonexistent page, raise segmentation fault in safe mode,
 	 * or create page with full privileges for writes in unsafe mode. */
 	if (!page) {
-		if (mem->safe)
-			fatal("illegal access at 0x%x: page not allocated", addr);
+		// if (mem->safe)
+		// 	fatal("illegal access at 0x%x: page not allocated", addr);
 		if (access == mem_access_read || access == mem_access_exec) {
 			memset(buf, 0, size);
 			return;
@@ -847,13 +847,14 @@ void perform_page_in(struct mem_t *mem, pageop_t op) {
 }
 
 void perform_page_out(struct mem_t *mem, pageop_t op) {
-	printf("Page out: %u from %u, disk_start: %u\n", op.vaddr, op.paddr, op.pte->disk_start);
+	printf("Page out: %u from %u, disk_start: %u, dirty: %d\n", op.vaddr, op.paddr, op.pte->disk_start, op.pte->dirtybit);
 	if (op.pte->dirtybit) {
 		struct mem_page_t *page = get_page_from_ptentry(mem, op.pte);
 		op.pte->perm = page->perm;
 		if (page->data) {
 			void* data = malloc(MEM_PAGESIZE);
 			memcpy(data, page->data, MEM_PAGESIZE);
+			printf("Data: %s\n", page->data);
 			write_swap(op.pte->disk_start, data);
 		}
 	}
