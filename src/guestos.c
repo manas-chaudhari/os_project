@@ -196,6 +196,9 @@ void boot(void) {
 char user_prog_path[200];
 ////	char *user_prog_path;
 
+void* read_swap(uint32_t disk_start);
+void write_swap(uint32_t disk_start, void* data);
+
 int main(int argc, char **argv) {
     uint64_t t;
     int myargc = 2;
@@ -250,6 +253,17 @@ int main(int argc, char **argv) {
     //// argv=user_prog_path;
     //argv=origargv;
     ///fgets(user_prog_path,max_path_length,stdin);
+    char* teststring = "test data";
+    uint32_t n = 9;
+    void* data = calloc(1, n);
+    char* str2 = calloc(1, n);
+    memcpy(data, teststring, n);
+    write_swap(2048, data);
+    void* data2 = read_swap(2048);
+
+    memcpy(str2, data2, n);
+    printf("Out string: %s\n", str2);
+
     shell();
     if (*configfile) {
         ///		printf("\n Entered inside checking\n\n")	;
@@ -272,7 +286,9 @@ int main(int argc, char **argv) {
     ///printf("\n the rcvd pa ths is %s \n",user_prog_path);
     /* Load programs from configuration file and command line. */
     ///////	if (*ctxconfig)
+    printf("Loading program\n");
     ld_load_prog_from_ctxconfig(ctxconfig);
+    printf("Loading program complete\n");
     ///////////////////if (argc >= 1)
     ///		ld_load_prog_from_cmdline(argc - 1, user_prog_path );
     ////////////		ld_load_prog_from_cmdline(argc - 1, argv + 1);

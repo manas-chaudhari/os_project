@@ -1,5 +1,5 @@
 
 [ Context 0 ]
-Exe = ./hello
+Exe = ./test
 
-Uid = 1232
+Uid = 234

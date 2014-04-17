@@ -69,10 +69,11 @@ struct mem_page_t *mem_page_get(struct mem_t *mem, uint32_t addr)
 
 	if (!entry) 
 	{
-		printf("Page not found for addr: %d\n", addr);
+		printf("Page not found for addr: %u\n", addr);
 		return NULL;
 	}
 	else {
+		entry->used = 1;
 		if (!entry->valid_bit)
 		{
 			vmem_load_page(mem, entry);
@@ -124,6 +125,8 @@ struct mem_page_t *mem_page_get_next(struct mem_t *mem, uint32_t addr)
 
 struct ptentry* mem_ptentry_create(struct mem_t* mem, uint32_t vaddr)
 {
+	if (vaddr == 134512640)
+		printf("First page\n");
 	uint32_t vindex, vtag, offset;
 	vtag = vaddr & ~(MEM_PAGESIZE - 1);
 	vindex = (vaddr >> MEM_LOGPAGESIZE) % MEM_PAGE_COUNT;
@@ -131,7 +134,7 @@ struct ptentry* mem_ptentry_create(struct mem_t* mem, uint32_t vaddr)
 	struct ptentry * E;
 	E = calloc(1, sizeof(struct ptentry));
 	E->valid_bit = 0;
-	E->dirtybit = 0;
+	E->dirtybit = 1;
 	E->paddr = 0;
 	E->disk_start = DISK_POINTER_ALL;
 	DISK_POINTER_ALL += MEM_PAGESIZE;
@@ -280,8 +283,10 @@ void *mem_get_buffer(struct mem_t *mem, uint32_t addr, int size,
 		return NULL;
 	
 	/* Check page permissions */
-	//if ((page->perm & access) != access && mem->safe)
-	//	fatal("mem_get_buffer: permission denied at 0x%x", addr);
+	if ((page->perm & access) != access && mem->safe) {
+		printf("Permission: %u\n", page->perm);
+		fatal("mem_get_buffer: permission denied at 0x%x", addr);
+	}
 	
 	/* Allocate and initialize page data if it does not exist yet. */
 	if (!page->data)
@@ -327,8 +332,10 @@ static void mem_access_page_boundary(struct mem_t *mem, uint32_t addr,
 
 	/* If it is a write access, set the 'modified' flag in the page
 	 * attributes (perm). This is not done for 'initialize' access. */
-	if (access == mem_access_write)
+	if (access == mem_access_write) {
 		page->perm |= mem_access_modif;
+		// entry->perm |= mem_access_modif;
+	}
 
 	/* Check permissions in safe mode */
 	if (mem->safe && (page->perm & access) != access){
@@ -763,7 +770,9 @@ void perform_page_out(struct mem_t *mem, pageop_t op);
  */
 
 void vmem_load_page(struct mem_t *mem, struct ptentry *entry) {
-	printf("Starting page load for vaddr: %d\n", entry->tag);
+	printf("Starting page load for vaddr: %u\n", entry->tag);
+	if (entry->tag == 134512640)
+		printf("First page\n");
 
 	pageop_t pagein_op;
 	pagein_op.operation = OPERATION_PAGE_IN;
@@ -774,7 +783,7 @@ void vmem_load_page(struct mem_t *mem, struct ptentry *entry) {
 	if (mem->free_frames_size > 0) {
 		pagein_op.paddr = mem->free_frames[mem->free_frames_size - 1];
 		vmem_add_page(mem, pagein_op.pte);
-		printf("Loading into free_frame: %d\n", pagein_op.paddr);
+		printf("Loading into free_frame: %u\n", pagein_op.paddr);
 	}
 	else
 	{
@@ -794,14 +803,14 @@ void vmem_load_page(struct mem_t *mem, struct ptentry *entry) {
 
 void* read_swap(uint32_t disk_start) {
 	FILE* ft;
-	printf("Opening file\n");
-	ft = fopen("../../Sim_disk", "ab+");
-	printf("Executing fseek\n");
+	printf("Reading from swap\n");
+	ft = fopen("../../Sim_disk", "rb+");
+	// printf("Executing fseek\n");
 	fseek(ft, disk_start, SEEK_SET);
 	void* buf = malloc(MEM_PAGESIZE);
-	printf("Fread\n");
+	// printf("Fread\n");
 	fread(buf, sizeof(char), MEM_PAGESIZE, ft);
-	printf("FClose\n");
+	// printf("FClose\n");
 	fclose(ft);
 	printf("buf %s\n", (char*)buf);
 	return buf;
@@ -809,23 +818,23 @@ void* read_swap(uint32_t disk_start) {
 
 void write_swap(uint32_t disk_start, void* data) {
 	FILE* ft;
-	ft = fopen("../../Sim_disk", "ab+");
+	ft = fopen("../../Sim_disk", "rb+");
 	fseek(ft, disk_start, SEEK_SET);
 	fwrite(data, sizeof(char), MEM_PAGESIZE, ft);
 	fclose(ft);
 }
 
 void perform_page_in(struct mem_t *mem, pageop_t op) {
-	printf("Page in: %d -> %d, disk_start: %d\n", op.vaddr, op.paddr, op.pte->disk_start);
+	printf("Page in: %u -> %u, disk_start: %u\n", op.vaddr, op.paddr, op.pte->disk_start);
 	void* data = read_swap(op.pte->disk_start);
 	struct mem_page_t *page = get_page_from_ptentry(mem, op.pte);
 	if (page->data == NULL) {
 		page->data = calloc(1, MEM_PAGESIZE);
 	}
 	// if (data != NULL) {
-		printf("Mempy\n");
+		// printf("Mempy\n");
 		memcpy(page->data, data, MEM_PAGESIZE);
-		printf("Mempy complete\n");		
+		// printf("Mempy complete\n");		
 	// }
 	
 	page->perm = op.pte->perm;
@@ -838,7 +847,7 @@ void perform_page_in(struct mem_t *mem, pageop_t op) {
 }
 
 void perform_page_out(struct mem_t *mem, pageop_t op) {
-	printf("Page out: %d from %d, disk_start: %d\n", op.vaddr, op.paddr, op.pte->disk_start);
+	printf("Page out: %u from %u, disk_start: %u\n", op.vaddr, op.paddr, op.pte->disk_start);
 	if (op.pte->dirtybit) {
 		struct mem_page_t *page = get_page_from_ptentry(mem, op.pte);
 		op.pte->perm = page->perm;
@@ -874,7 +883,7 @@ void display_state(struct mem_t *mem) {
     for (i = 0; i < mem->valid_ptentries_size; i++) {
         if (i == mem->clock_pointer)
             printf("*");
-        printf("[%d,%d]\t", mem->valid_ptentries[i]->tag, mem->valid_ptentries[i]->used);
+        printf("[%u,%u]\t", mem->valid_ptentries[i]->tag, mem->valid_ptentries[i]->used);
     }
     printf("\n");
 }
@@ -889,7 +898,7 @@ struct ptentry* run_clock_policy(struct mem_t *mem, struct ptentry* newpage) {
 			struct ptentry * page_to_replace = page_list[clock_pointer];
 			page_list[clock_pointer] = newpage;
 			inc_pointer(mem);
-            printf("OUT: %d,  IN: %d\n", page_to_replace->tag, newpage->tag);
+            printf("OUT: %u,  IN: %u\n", page_to_replace->tag, newpage->tag);
             return page_to_replace;
 		} else {
 			page_list[clock_pointer]->used = 0;
